@@ -2,9 +2,9 @@ package client;
 
 import commands.Command;
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Alert;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -14,6 +14,7 @@ import javafx.stage.Stage;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.Socket;
 import java.net.URL;
 import java.util.ResourceBundle;
@@ -39,13 +40,10 @@ public class Controller implements Initializable {
     private static DataInputStream in;
     private static DataOutputStream out;
 
-    private boolean authenticated;
     private String nickname;
-
     private Stage stage;
 
     public void setAuthenticated(boolean authenticated) {
-        this.authenticated = authenticated;
         messagePanel.setVisible(authenticated);
         messagePanel.setManaged(authenticated);
         authPanel.setVisible(!authenticated);
@@ -61,16 +59,18 @@ public class Controller implements Initializable {
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        Platform.runLater(() -> {
-            stage = (Stage) textField.getScene().getWindow();
-        });
+        Platform.runLater(() -> stage = (Stage) textField.getScene().getWindow());
 
         setAuthenticated(false);
     }
 
-    private void connect() {
+    private boolean connect() {
         try {
-            socket = new Socket(IP_ADDRESS, PORT);
+            try {
+                socket = new Socket(IP_ADDRESS, PORT);
+            } catch (ConnectException e) {
+                return false;
+            }
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
@@ -121,10 +121,12 @@ public class Controller implements Initializable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        return socket.isConnected();
     }
 
 
-    public void sendMsg(ActionEvent actionEvent) {
+    public void sendMsg() {
         try {
             if (textField.getText().trim().length() > 0) {
                 out.writeUTF(textField.getText());
@@ -136,12 +138,20 @@ public class Controller implements Initializable {
         }
     }
 
-    public void trytoAuth(ActionEvent actionEvent) {
-        if (socket == null || socket.isClosed()) {
-            connect();
+    public void tryToAuth() {
+        if (loginField.getText().isEmpty() || passwordField.getText().isEmpty()) {
+            new Alert(Alert.AlertType.WARNING, "Поля логин и пароль не должны быть пустыми").showAndWait();
+            return;
         }
 
-        String msg = String.format("%s %s %s",Command.AUTH, loginField.getText().trim(), passwordField.getText().trim());
+        if (socket == null || socket.isClosed()) {
+            if (!connect()) {
+                textArea.appendText("Подключиться к серверу не удалось\n");
+                return;
+            }
+        }
+
+        String msg = String.format("%s %s %s", Command.AUTH, loginField.getText().trim(), passwordField.getText().trim());
         try {
             out.writeUTF(msg);
             passwordField.clear();

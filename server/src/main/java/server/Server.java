@@ -11,8 +11,8 @@ public class Server {
     private ServerSocket server;
     private Socket socket;
     private final int PORT = 8189;
-    private List<ClientHandler> clients;
-    private AuthService authService;
+    private final List<ClientHandler> clients;
+    private final AuthService authService;
 
     public Server() {
         clients = new CopyOnWriteArrayList<>();
@@ -43,6 +43,29 @@ public class Server {
         for (ClientHandler c : clients) {
             c.sendMsg(message);
         }
+    }
+
+    public boolean sendPrivateMsg(ClientHandler from, String nickname, String msg) {
+        ClientHandler to = getClientByNickname(nickname);
+        if (to == null) {
+            return false;
+        }
+
+        String message = String.format("[ %s --> %s ] : %s", from.getNickname(), to.getNickname(), msg);
+        from.sendMsg(message);
+        to.sendMsg(message);
+
+        return true;
+    }
+
+    private ClientHandler getClientByNickname(String nickname) {
+        for (ClientHandler client : clients) {
+            if (client.getNickname().equals(nickname)) {
+                return client;
+            }
+        }
+
+        return null;
     }
 
     public void subscribe(ClientHandler clientHandler){
