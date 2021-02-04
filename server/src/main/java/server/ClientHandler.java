@@ -8,9 +8,6 @@ import java.io.IOException;
 import java.net.Socket;
 
 public class ClientHandler {
-    private Server server;
-    private Socket socket;
-
     private DataInputStream in;
     private DataOutputStream out;
 
@@ -18,8 +15,6 @@ public class ClientHandler {
 
     public ClientHandler(Server server, Socket socket) {
         try {
-            this.server = server;
-            this.socket = socket;
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
@@ -34,8 +29,12 @@ public class ClientHandler {
                                 out.writeUTF(Command.END);
                                 throw new RuntimeException("client want to disconnected");
                             }
-                            if (str.startsWith(Command.AUTH)) {
+                            else if (str.startsWith(Command.AUTH)) {
                                 String[] token = str.split("\\s");
+                                if (token.length != 3) {
+                                    sendMsg("Ошибка при передаче логина / пароля");
+                                    break;
+                                }
                                 String newNick = server.getAuthService()
                                         .getNicknameByLoginAndPassword(token[1], token[2]);
                                 if (newNick != null) {
@@ -47,6 +46,9 @@ public class ClientHandler {
                                     sendMsg("Неверный логин / пароль");
                                 }
                             }
+                            else {
+                                sendMsg("Ошибка в команде");
+                            }
                         }
                     }
 
@@ -54,9 +56,26 @@ public class ClientHandler {
                     while (true) {
                         String str = in.readUTF();
 
-                        if (str.equals(Command.END)) {
-                            out.writeUTF(Command.END);
-                            break;
+                        if (str.startsWith("/")) {
+                            if (str.equals(Command.END)) {
+                                out.writeUTF(Command.END);
+                                break;
+                            } else if (str.startsWith(Command.PRIVATE_MSG)) {
+                                String[] token = str.split("\\s", 3);
+                                if (token.length != 3) {
+                                    sendMsg("Ошибка в команде");
+                                    continue;
+                                }
+
+                                if (!server.sendPrivateMsg(this, token[1], token[2])) {
+                                    sendMsg("Ошибка при отправке личного сообщения");
+                                }
+
+                            } else {
+                                sendMsg("Ошибка в команде");
+                            }
+
+                            continue;
                         }
 
                         server.broadcastMsg(this, str);
